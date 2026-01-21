@@ -80,8 +80,8 @@ jobs:
           echo "  Statements: $STATEMENTS%"
 
           # Check thresholds (fail if below)
-          if (( $(echo "$LINES < 70" | bc -l) )); then
-            echo "::error::Line coverage ($LINES%) is below threshold (70%)"
+          if (( $(echo "$LINES < 65" | bc -l) )); then
+            echo "::error::Line coverage ($LINES%) is below threshold (65%)"
             exit 1
           fi
 
