@@ -676,3 +676,26 @@ h1, h2, h3, .font-display {
 .frame-icon.frame-icon-natural .frame-icon-artwork {
   box-shadow: inset 2px 2px 4px rgba(0,0,0,0.1);
 }
+
+/* ============================================
+   MARQUEE ANIMATION
+   Horizontal scrolling text for premium feel
+   ============================================ */
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  display: inline-flex;
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
