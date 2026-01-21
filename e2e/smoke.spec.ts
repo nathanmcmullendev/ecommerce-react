@@ -225,8 +225,8 @@ test.describe('Gallery Store E2E', () => {
       // Navigate home via logo
       await page.getByRole('link', { name: /Gallery Store/ }).click()
       
-      // Open cart via header button (the SVG shopping bag icon)
-      await page.locator('header button').click()
+      // Open cart via header cart button
+      await page.getByRole('button', { name: 'Shopping cart' }).click()
       
       // Item should still be there
       await expect(page.getByRole('heading', { name: /Cart \(1\)/ })).toBeVisible()
