@@ -45,8 +45,21 @@ export default function Cart() {
   const handleCheckout = async () => {
     if (items.length === 0) return
 
+    // Validate all items have valid Shopify variant IDs (gid://shopify/ProductVariant/...)
+    const invalidItems = items.filter(item => !item.variantId.startsWith('gid://shopify/ProductVariant/'))
+    if (invalidItems.length > 0) {
+      setCheckoutError('Some items have invalid variants. Please remove and re-add them.')
+      return
+    }
+
     setCheckoutLoading(true)
     setCheckoutError(null)
+
+    // Set a timeout to reset loading state if redirect doesn't happen
+    const timeoutId = setTimeout(() => {
+      setCheckoutLoading(false)
+      setCheckoutError('Checkout is taking too long. Please try again.')
+    }, 10000) // 10 second timeout
 
     try {
       // Create Shopify cart with our cart items
@@ -57,9 +70,13 @@ export default function Cart() {
         }))
       )
 
+      // Clear timeout since we got a response
+      clearTimeout(timeoutId)
+
       // Redirect to Shopify's hosted checkout
       window.location.href = checkoutUrl
     } catch (error) {
+      clearTimeout(timeoutId)
       console.error('Checkout error:', error)
       setCheckoutError('Unable to start checkout. Please try again.')
       setCheckoutLoading(false)
@@ -228,8 +245,9 @@ export default function Cart() {
                 )
               })}
 
-              {/* You may also like - shown after all cart items */}
-              <YouMayAlsoLike cartItems={items} />
+              {/* You may also like - temporarily disabled due to variant ID issues */}
+              {/* TODO: Fix variant lookup to use real Shopify variant GIDs */}
+              {/* <YouMayAlsoLike cartItems={items} /> */}
             </div>
           )}
         </div>
