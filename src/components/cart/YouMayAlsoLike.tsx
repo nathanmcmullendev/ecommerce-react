@@ -15,14 +15,24 @@ const frameOptions = [
 ]
 
 /**
- * Size options with prices (matching product page)
+ * Size options with prices (matching product page) - inches only
  */
 const sizeOptions = [
-  { id: '8x10', label: '20×25 cm / 8×10"', price: 45 },
-  { id: '11x14', label: '28×36 cm / 11×14"', price: 65 },
-  { id: '16x20', label: '41×51 cm / 16×20"', price: 95 },
-  { id: '24x30', label: '61×76 cm / 24×30"', price: 145 },
+  { id: '8x10', label: '8×10"', price: 45 },
+  { id: '11x14', label: '11×14"', price: 65 },
+  { id: '16x20', label: '16×20"', price: 95 },
+  { id: '24x30', label: '24×30"', price: 145 },
 ]
+
+/**
+ * Frame price additions
+ */
+const framePrices: Record<string, number> = {
+  'Unframed': 0,
+  'Black Frame': 35,
+  'White Frame': 35,
+  'Natural Wood': 45,
+}
 
 interface YouMayAlsoLikeProps {
   /** Current cart items to exclude from suggestions */
@@ -48,15 +58,22 @@ export function YouMayAlsoLike({ cartItems }: YouMayAlsoLikeProps) {
   const [selectedFrame, setSelectedFrame] = useState('Black Frame')
   const [selectedSize, setSelectedSize] = useState('8x10')
 
-  // Get products not already in cart
+  // Get products from same artist(s) as cart items, excluding items already in cart
   const cartProductIds = useMemo(
     () => new Set(cartItems.map(item => item.productId)),
     [cartItems]
   )
 
+  const cartArtists = useMemo(
+    () => new Set(cartItems.map(item => item.artist)),
+    [cartItems]
+  )
+
   const suggestions = useMemo(
-    () => products.filter((p: Product) => !cartProductIds.has(p.id)),
-    [products, cartProductIds]
+    () => products.filter((p: Product) =>
+      !cartProductIds.has(p.id) && cartArtists.has(p.artist)
+    ),
+    [products, cartProductIds, cartArtists]
   )
 
   // Don't render if no suggestions
@@ -81,6 +98,8 @@ export function YouMayAlsoLike({ cartItems }: YouMayAlsoLikeProps) {
 
   const selectedSizeOption = sizeOptions.find(s => s.id === selectedSize) || sizeOptions[0]
   const frameColor = frameOptions.find(f => f.id === selectedFrame)?.color || '#1a1a1a'
+  const framePrice = framePrices[selectedFrame] || 0
+  const totalPrice = selectedSizeOption.price + framePrice
 
   const handleAddToCart = () => {
     dispatch({
@@ -93,7 +112,7 @@ export function YouMayAlsoLike({ cartItems }: YouMayAlsoLikeProps) {
         title: currentProduct.title,
         artist: currentProduct.artist,
         image: currentProduct.image,
-        price: selectedSizeOption.price
+        price: totalPrice
       }
     })
     // Move to next product after adding
@@ -199,7 +218,7 @@ export function YouMayAlsoLike({ cartItems }: YouMayAlsoLikeProps) {
               ))}
             </select>
             <span className="text-sm font-medium text-gray-900 min-w-[50px]">
-              ${selectedSizeOption.price}
+              ${totalPrice}
             </span>
             <button
               onClick={handleAddToCart}

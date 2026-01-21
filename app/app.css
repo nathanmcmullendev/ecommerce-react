@@ -472,16 +472,16 @@ h1, h2, h3, .font-display {
   font-size: 14px;
   font-weight: 500;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 2px solid #1e293b;
   background: white;
-  color: #64748b;
+  color: #1e293b;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .view-toggle-btn:hover {
-  border-color: #cbd5e1;
-  color: #475569;
+  background: #f1f5f9;
+  color: #0f172a;
 }
 
 .view-toggle-btn.active {

@@ -66,6 +66,19 @@ export function ArtistCircles({ artists, selectedArtist, onSelect, filteredCount
   return (
     <section className="py-8 px-4 bg-white border-b border-gray-100">
       <div className="max-w-7xl mx-auto">
+        {/* Back to All Collections link - shown when artist is selected */}
+        {selectedArtist && (
+          <button
+            onClick={() => onSelect('')}
+            className="flex items-center gap-1.5 mx-auto mb-4 text-sm text-ink-500 hover:text-ink-900 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            All Collections
+          </button>
+        )}
+
         <h2 className="text-center font-display text-2xl text-ink-900 mb-2">
           {collectionTitle}
         </h2>

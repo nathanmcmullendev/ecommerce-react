@@ -1,7 +1,7 @@
 import { useLoaderData, useNavigate, Link } from "react-router";
 import { useMemo } from "react";
 // @ts-expect-error - React Router 7 generates these types at build time
-import type { Route } from "./+types/home";
+import type { Route } from "./+types/collections";
 import { fetchShopifyProducts } from "@/data/shopify-api";
 import { getResizedImage, IMAGE_SIZES } from "@/utils/images";
 import type { Product } from "@/types";
