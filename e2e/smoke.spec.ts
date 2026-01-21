@@ -158,18 +158,17 @@ test.describe('Gallery Store E2E', () => {
       await expect(page.getByText('Your cart is empty')).toBeVisible()
     })
 
-    test('should navigate to checkout', async ({ page }) => {
+    // Skipped: Checkout now redirects to Shopify hosted checkout
+    test.skip('should navigate to checkout', async ({ page }) => {
       await page.goto('/')
       await waitForProducts(page)
       await page.locator('a[href^="/product/"]').first().click()
       await page.getByRole('button', { name: 'Add to Cart' }).click()
-      
-      // Click checkout
-      await page.getByRole('link', { name: 'Checkout' }).click()
-      
-      // Should be on checkout page
-      await expect(page).toHaveURL('/checkout')
-      await expect(page.getByRole('heading', { name: 'Checkout' })).toBeVisible()
+
+      // Click checkout button (redirects to Shopify)
+      await page.getByRole('button', { name: 'Checkout' }).click()
+
+      // Would redirect to Shopify checkout - cannot test in E2E
     })
   })
 
@@ -182,17 +181,16 @@ test.describe('Gallery Store E2E', () => {
       await expect(page.getByRole('link', { name: 'Continue shopping' })).toBeVisible()
     })
 
-    test('should display order summary with items', async ({ page }) => {
+    // Skipped: Checkout now redirects to Shopify hosted checkout (no internal order summary page)
+    test.skip('should display order summary with items', async ({ page }) => {
       // Add item first
       await page.goto('/')
       await waitForProducts(page)
       await page.locator('a[href^="/product/"]').first().click()
       await page.getByRole('button', { name: 'Add to Cart' }).click()
-      await page.getByRole('link', { name: 'Checkout' }).click()
-      
-      // Should show order summary
-      await expect(page.getByRole('heading', { name: 'Order Summary' })).toBeVisible()
-      await expect(page.getByRole('heading', { name: 'Payment' })).toBeVisible()
+      await page.getByRole('button', { name: 'Checkout' }).click()
+
+      // Would redirect to Shopify checkout - order summary is on Shopify side
     })
   })
 
