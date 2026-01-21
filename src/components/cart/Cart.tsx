@@ -82,6 +82,9 @@ export default function Cart() {
       // Clear timeout since we got a response
       clearTimeout(timeoutId)
 
+      // Clear cart before redirecting (items are now in Shopify cart)
+      dispatch({ type: 'CLEAR_CART' })
+
       // Redirect to Shopify's hosted checkout
       window.location.href = checkoutUrl
     } catch (error) {
