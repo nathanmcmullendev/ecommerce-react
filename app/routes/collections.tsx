@@ -55,9 +55,9 @@ export async function loader({ params }: Route.LoaderArgs) {
     });
 
     // Convert to sorted array (by product count descending)
-    // Include artists with 2+ prints to show more variety
+    // Include artists with 3+ prints for meaningful collections
     const artists: Artist[] = Array.from(artistData.entries())
-      .filter(([, data]) => data.count >= 2)
+      .filter(([, data]) => data.count >= 3)
       .map(([name, data]) => ({
         name,
         handle: toHandle(name),
@@ -72,6 +72,16 @@ export async function loader({ params }: Route.LoaderArgs) {
     // Return empty data on error so page still renders
     return { products: [], artists: [], selectedArtist: null };
   }
+}
+
+// Preload artist thumbnail images for faster rendering
+export function links({ data }: Route.LinksArgs) {
+  if (!data?.artists) return []
+  return data.artists.map((artist: Artist) => ({
+    rel: 'preload',
+    as: 'image',
+    href: getResizedImage(artist.image, 100, { crop: 'fill' }),
+  }))
 }
 
 // Meta tags for SEO with Open Graph support
