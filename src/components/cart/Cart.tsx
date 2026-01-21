@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useCart, useCartDispatch } from '../../context/CartContext'
 import { getResizedImage } from '../../utils/images'
 import type { ProductRouterState } from '../../types'
 import { ShippingProgress } from '../layout/ShippingBanner'
-import { MoreFromArtist } from './MoreFromArtist'
+import { YouMayAlsoLike } from './YouMayAlsoLike'
+import { createShopifyCheckout } from '../../data/shopify-api'
 
 /**
  * Cart Component
@@ -36,6 +38,33 @@ const frameColors: Record<string, string> = {
 export default function Cart() {
   const { items, isOpen, total } = useCart()
   const dispatch = useCartDispatch()
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+
+  // Handle checkout - create Shopify cart and redirect
+  const handleCheckout = async () => {
+    if (items.length === 0) return
+
+    setCheckoutLoading(true)
+    setCheckoutError(null)
+
+    try {
+      // Create Shopify cart with our cart items
+      const checkoutUrl = await createShopifyCheckout(
+        items.map(item => ({
+          variantId: item.variantId,
+          quantity: item.quantity
+        }))
+      )
+
+      // Redirect to Shopify's hosted checkout
+      window.location.href = checkoutUrl
+    } catch (error) {
+      console.error('Checkout error:', error)
+      setCheckoutError('Unable to start checkout. Please try again.')
+      setCheckoutLoading(false)
+    }
+  }
 
   return (
     <>
@@ -215,15 +244,12 @@ export default function Cart() {
                         Remove
                       </button>
                     </div>
-
-                    {/* More from this artist carousel */}
-                    <MoreFromArtist
-                      artist={item.artist}
-                      currentProductId={item.productId}
-                    />
                   </div>
                 )
               })}
+
+              {/* You may also like - shown after all cart items */}
+              <YouMayAlsoLike cartItems={items} />
             </div>
           )}
         </div>
@@ -234,20 +260,71 @@ export default function Cart() {
             {/* Free shipping confirmation */}
             <ShippingProgress />
 
+            {/* Total */}
             <div className="flex items-center justify-between mb-3">
-              <span className="text-gray-600">Subtotal</span>
-              <span className="text-xl font-semibold text-gray-900">
-                ${total.toFixed(0)}
+              <span className="text-sm uppercase tracking-wide text-ink-500">Total</span>
+              <span className="text-2xl font-semibold text-gray-900">
+                ${total.toFixed(2)}
               </span>
             </div>
 
-            <Link
-              to="/checkout"
-              onClick={() => dispatch({ type: 'TOGGLE_CART' })}
-              className="block w-full py-3 text-center text-white font-medium rounded-lg btn-primary"
+            {/* Quality badge */}
+            <p className="text-xs text-center text-gray-500 mb-4 flex items-center justify-center gap-1">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              Digitally restored by hand • Printed & framed to order
+            </p>
+
+            {/* Checkout error */}
+            {checkoutError && (
+              <p className="text-red-600 text-sm text-center mb-3">{checkoutError}</p>
+            )}
+
+            {/* Checkout button */}
+            <button
+              onClick={handleCheckout}
+              disabled={checkoutLoading}
+              className={`block w-full py-3.5 text-center text-white font-medium transition-colors uppercase tracking-wide text-sm ${
+                checkoutLoading
+                  ? 'bg-gray-400 cursor-wait'
+                  : 'bg-ink-800 hover:bg-ink-900'
+              }`}
             >
-              Checkout
-            </Link>
+              {checkoutLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Redirecting to checkout...
+                </span>
+              ) : (
+                'Checkout'
+              )}
+            </button>
+
+            {/* Trust badges */}
+            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-center gap-6 text-xs text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                Free shipping
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                30-day returns
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Secure checkout
+              </span>
+            </div>
           </div>
         )}
       </div>

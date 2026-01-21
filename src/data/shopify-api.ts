@@ -509,6 +509,80 @@ export async function fetchCollectionProducts(handle: string): Promise<Product[]
   )
 }
 
+// ============================================================================
+// Shopify Cart/Checkout API
+// ============================================================================
+
+interface CartLineInput {
+  merchandiseId: string  // Shopify variant GID
+  quantity: number
+}
+
+interface CreateCartResponse {
+  data: {
+    cartCreate: {
+      cart: {
+        id: string
+        checkoutUrl: string
+      } | null
+      userErrors: Array<{
+        field: string[]
+        message: string
+      }>
+    }
+  }
+}
+
+/**
+ * Create a Shopify cart and return the checkout URL
+ *
+ * This creates a cart using the Storefront API and returns
+ * Shopify's hosted checkout URL where customers complete payment.
+ *
+ * @param items - Array of cart items with variantId and quantity
+ * @returns Checkout URL to redirect the customer to
+ */
+export async function createShopifyCheckout(
+  items: Array<{ variantId: string; quantity: number }>
+): Promise<string> {
+  const mutation = `
+    mutation cartCreate($lines: [CartLineInput!]!) {
+      cartCreate(input: { lines: $lines }) {
+        cart {
+          id
+          checkoutUrl
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `
+
+  // Transform items to Shopify's expected format
+  const lines: CartLineInput[] = items.map(item => ({
+    merchandiseId: item.variantId,
+    quantity: item.quantity
+  }))
+
+  const response = await shopifyFetch<CreateCartResponse>(mutation, { lines })
+
+  // Check for errors
+  if (response.data.cartCreate.userErrors.length > 0) {
+    const errorMessages = response.data.cartCreate.userErrors
+      .map(e => e.message)
+      .join(', ')
+    throw new ShopifyApiError(`Failed to create checkout: ${errorMessages}`)
+  }
+
+  if (!response.data.cartCreate.cart?.checkoutUrl) {
+    throw new ShopifyApiError('No checkout URL returned from Shopify')
+  }
+
+  return response.data.cartCreate.cart.checkoutUrl
+}
+
 // Export config for checking data source
 export const shopifyConfig = {
   store: SHOPIFY_STORE,

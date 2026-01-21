@@ -1,452 +1,48 @@
-import { useState, useEffect, useRef } from 'react'
-import { Link, useSearchParams } from 'react-router'
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
-import { loadStripe, Stripe } from '@stripe/stripe-js'
-import { useCart, useCartDispatch } from '../context/CartContext'
-import { sizes, frames } from '../data/products'
-import { getResizedImage } from '../utils/images'
-import { trackBeginCheckout, trackAddPaymentInfo, trackPurchase } from '../utils/analytics'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
+import { useCart } from '../context/CartContext'
+import { createShopifyCheckout } from '../data/shopify-api'
 
-// DON'T load Stripe at module level - lazy load it when component mounts
-let stripePromise: Promise<Stripe | null> | null = null
-
-function getStripe() {
-  if (!stripePromise) {
-    stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '')
-  }
-  return stripePromise
-}
-
-interface ShippingAddress {
-  firstName: string
-  lastName: string
-  address1: string
-  address2: string
-  city: string
-  province: string
-  zip: string
-  country: string
-  phone: string
-}
-
-interface CartItem {
-  key: string
-  productId: string
-  variantId: string
-  title: string
-  artist: string
-  image: string
-  sizeId: string
-  frameId: string
-  price: number
-  quantity: number
-}
-
-interface CheckoutFormProps {
-  total: number
-  items: CartItem[]
-  shippingAddress: ShippingAddress
-  email: string
-  onSuccess: (orderName: string) => void
-  isShippingComplete: boolean
-}
-
-function CheckoutForm({ total, items, shippingAddress, email, onSuccess, isShippingComplete }: CheckoutFormProps) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const [processing, setProcessing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // Map items for analytics
-  const analyticsItems = items.map(item => ({
-    id: item.productId,
-    name: item.title,
-    price: item.price,
-    quantity: item.quantity,
-    variant: `${item.sizeId} / ${item.frameId}`,
-  }))
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!stripe || !elements || !isShippingComplete) return
-
-    setProcessing(true)
-    setError(null)
-
-    // Track add_payment_info when payment form is submitted
-    trackAddPaymentInfo(analyticsItems, total)
-
-    try {
-      // Step 1: Submit payment element
-      const { error: submitError } = await elements.submit()
-      if (submitError) {
-        setError(submitError.message || 'Payment failed')
-        setProcessing(false)
-        return
-      }
-
-      // Step 2: Confirm payment with Stripe
-      const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          receipt_email: email,
-        },
-        redirect: 'if_required', // Don't redirect, handle inline
-      })
-
-      if (confirmError) {
-        setError(confirmError.message || 'Payment failed')
-        setProcessing(false)
-        return
-      }
-
-      // Step 3: Payment succeeded - create order in Shopify
-      if (paymentIntent && paymentIntent.status === 'succeeded') {
-        const lineItems = items.map(item => {
-          const size = sizes.find(s => s.id === item.sizeId)
-          const frame = frames.find(f => f.id === item.frameId)
-          return {
-            title: `${item.title} - ${size?.name || item.sizeId}, ${frame?.name || item.frameId} Frame`,
-            quantity: item.quantity,
-            price: String(item.price),
-            variantId: item.variantId,
-            productId: item.productId,
-          }
-        })
-
-        const orderResponse = await fetch('/api/create-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email,
-            lineItems,
-            shippingAddress,
-            paymentIntentId: paymentIntent.id,
-            total,
-          }),
-        })
-
-        const orderData = await orderResponse.json()
-        const orderName = orderData.order?.name || paymentIntent.id.slice(-8).toUpperCase()
-
-        // Track successful purchase
-        trackPurchase(orderName, analyticsItems, total, 0, 0)
-
-        if (!orderResponse.ok) {
-          console.error('Order creation failed:', orderData)
-          // Payment succeeded but order creation failed - still show success
-          // but log the error for manual resolution
-          onSuccess(paymentIntent.id.slice(-8).toUpperCase())
-          return
-        }
-
-        onSuccess(orderName)
-      }
-    } catch (err) {
-      console.error('Checkout error:', err)
-      setError('An unexpected error occurred. Please try again.')
-      setProcessing(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="border rounded-xl p-4 border-gray-200 bg-white">
-        <PaymentElement />
-      </div>
-
-      {error && (
-        <div className="px-4 py-3 rounded-xl text-sm bg-red-50 border border-red-200 text-red-600">
-          {error}
-        </div>
-      )}
-
-      <button
-        type="submit"
-        disabled={!stripe || processing || !isShippingComplete}
-        className={`w-full py-4 rounded-xl font-semibold text-lg text-white transition-all ${
-          processing || !isShippingComplete
-            ? 'bg-gray-400 cursor-not-allowed'
-            : 'bg-ink-900 hover:bg-ink-800 cursor-pointer'
-        }`}
-      >
-        {processing ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            Processing...
-          </span>
-        ) : !isShippingComplete ? (
-          'Complete shipping info to pay'
-        ) : (
-          `Pay now`
-        )}
-      </button>
-
-      <p className="text-xs text-center flex items-center justify-center gap-1 text-gray-400">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-        All transactions are secure and encrypted
-      </p>
-    </form>
-  )
-}
-
-function SuccessMessage({ orderName }: { orderName: string }) {
-  const dispatch = useCartDispatch()
-
-  useEffect(() => {
-    dispatch({ type: 'CLEAR_CART' })
-  }, [dispatch])
-
-  return (
-    <main className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
-      <div className="text-center">
-        <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 bg-green-100">
-          <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h1 className="text-3xl font-display font-semibold mb-4 text-gray-900">
-          Thank you for your order!
-        </h1>
-        <p className="mb-2 text-gray-600">
-          Your payment was successful and your prints are being prepared.
-        </p>
-        <p className="text-sm mb-8 text-gray-400">
-          Order: {orderName}
-        </p>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 px-6 py-3 text-white rounded-xl font-medium transition-all bg-ink-900 hover:bg-ink-800"
-        >
-          Continue Shopping
-        </Link>
-      </div>
-    </main>
-  )
-}
-
-// Order Summary Component (collapsible on mobile)
-function OrderSummary({ items, total, isOpen, onToggle }: {
-  items: CartItem[]
-  total: number
-  isOpen: boolean
-  onToggle: () => void
-}) {
-  return (
-    <div className="bg-paper-100 lg:bg-white">
-      {/* Mobile: Collapsible header */}
-      <button
-        onClick={onToggle}
-        className="lg:hidden w-full flex items-center justify-between px-4 py-4 border-b border-gray-200"
-      >
-        <span className="flex items-center gap-2 text-sm font-medium text-ink-900">
-          Order summary
-          <svg
-            className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </span>
-        <span className="font-semibold text-ink-900">${total}</span>
-      </button>
-
-      {/* Content */}
-      <div className={`${isOpen ? 'block' : 'hidden'} lg:block p-4 lg:p-6 space-y-4`}>
-        {/* Items */}
-        {items.map((item) => {
-          const size = sizes.find(s => s.id === item.sizeId)
-          const frame = frames.find(f => f.id === item.frameId)
-
-          return (
-            <div key={item.key} className="flex gap-3">
-              <div className="relative">
-                <div
-                  className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100 border-2"
-                  style={{ borderColor: frame?.color || '#333' }}
-                >
-                  <img
-                    src={getResizedImage(item.image, 80)}
-                    alt={item.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                {item.quantity > 1 && (
-                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-ink-600 text-white text-xs rounded-full flex items-center justify-center">
-                    {item.quantity}
-                  </span>
-                )}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-sm line-clamp-1 text-ink-900">
-                  {item.title}
-                </h3>
-                <p className="text-xs mt-0.5 text-ink-500">
-                  {size?.name} / {frame?.name} frame
-                </p>
-              </div>
-
-              <span className="font-medium text-sm text-ink-900">
-                ${item.price * item.quantity}
-              </span>
-            </div>
-          )
-        })}
-
-        {/* Discount code */}
-        <div className="flex gap-2 pt-2">
-          <input
-            type="text"
-            placeholder="Discount code"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-ink-500"
-          />
-          <button className="px-4 py-2 bg-gray-100 text-ink-600 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
-            Apply
-          </button>
-        </div>
-
-        {/* Totals */}
-        <div className="border-t pt-4 space-y-2 border-gray-200">
-          <div className="flex justify-between text-sm text-ink-600">
-            <span>Subtotal</span>
-            <span>${total}</span>
-          </div>
-          <div className="flex justify-between text-sm text-ink-600">
-            <span>Shipping</span>
-            <span className="text-ink-500">Enter shipping address</span>
-          </div>
-          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-            <span className="font-semibold text-ink-900">Total</span>
-            <div className="text-right">
-              <span className="text-xs text-ink-500 mr-2">USD</span>
-              <span className="text-xl font-semibold text-ink-900">${total}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
+/**
+ * Checkout Page
+ *
+ * This page redirects to Shopify's hosted checkout.
+ * Users typically go straight from the cart drawer to Shopify checkout,
+ * but this page handles direct navigation to /checkout.
+ */
 export default function Checkout() {
-  const { items, total } = useCart()
-  const [clientSecret, setClientSecret] = useState('')
-  const [stripeReady, setStripeReady] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const { items } = useCart()
   const [error, setError] = useState<string | null>(null)
-  const [searchParams] = useSearchParams()
-  const [orderSummaryOpen, setOrderSummaryOpen] = useState(false)
-
-  // Order success state
-  const [orderComplete, setOrderComplete] = useState(false)
-  const [orderName, setOrderName] = useState('')
-
-  // Customer info state
-  const [email, setEmail] = useState('')
-  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
-    firstName: '',
-    lastName: '',
-    address1: '',
-    address2: '',
-    city: '',
-    province: '',
-    zip: '',
-    country: 'US',
-    phone: '',
-  })
-
-  // Check for success from URL (legacy support)
-  const isSuccessFromUrl = searchParams.get('success') || searchParams.get('redirect_status') === 'succeeded'
-
-  // Track begin_checkout when page loads with items
-  const hasTrackedBeginCheckout = useRef(false)
-  useEffect(() => {
-    if (isSuccessFromUrl || orderComplete || items.length === 0 || hasTrackedBeginCheckout.current) return
-    hasTrackedBeginCheckout.current = true
-    trackBeginCheckout(
-      items.map(item => ({
-        id: item.productId,
-        name: item.title,
-        price: item.price,
-        quantity: item.quantity,
-        variant: `${item.sizeId} / ${item.frameId}`,
-      })),
-      total
-    )
-  }, [items, total, isSuccessFromUrl, orderComplete])
-
-  // Lazy load Stripe only when this component mounts
-  useEffect(() => {
-    if (isSuccessFromUrl || orderComplete) return
-    getStripe().then(() => setStripeReady(true))
-  }, [isSuccessFromUrl, orderComplete])
+  const [redirecting, setRedirecting] = useState(false)
 
   useEffect(() => {
-    if (isSuccessFromUrl || orderComplete) return
-    if (items.length === 0) {
-      setLoading(false)
-      return
-    }
+    // Don't redirect if cart is empty
+    if (items.length === 0) return
 
-    async function createPaymentIntent() {
+    // Avoid double redirect
+    if (redirecting) return
+    setRedirecting(true)
+
+    async function redirectToShopify() {
       try {
-        const response = await fetch('/api/create-payment-intent', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items, total })
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to create payment intent')
-        }
-
-        const data = await response.json()
-        setClientSecret(data.clientSecret)
+        const checkoutUrl = await createShopifyCheckout(
+          items.map(item => ({
+            variantId: item.variantId,
+            quantity: item.quantity
+          }))
+        )
+        window.location.href = checkoutUrl
       } catch (err) {
-        console.error('Payment intent error:', err)
-        setError('Unable to initialize payment. Please try again.')
-      } finally {
-        setLoading(false)
+        console.error('Checkout redirect error:', err)
+        setError('Unable to start checkout. Please try again.')
+        setRedirecting(false)
       }
     }
 
-    createPaymentIntent()
-  }, [items, total, isSuccessFromUrl, orderComplete])
+    redirectToShopify()
+  }, [items, redirecting])
 
-  // Handle successful order
-  const handleOrderSuccess = (name: string) => {
-    setOrderName(name)
-    setOrderComplete(true)
-  }
-
-  // Check if shipping form is complete
-  const isShippingComplete = !!(email &&
-    shippingAddress.firstName &&
-    shippingAddress.lastName &&
-    shippingAddress.address1 &&
-    shippingAddress.city &&
-    shippingAddress.province &&
-    shippingAddress.zip)
-
-  // Update field helper
-  const updateField = (field: keyof ShippingAddress, value: string) => {
-    setShippingAddress({ ...shippingAddress, [field]: value })
-  }
-
-  // Return success page
-  if (isSuccessFromUrl || orderComplete) {
-    const displayOrderName = orderName || searchParams.get('payment_intent')?.slice(-8).toUpperCase() || 'Processing...'
-    return <SuccessMessage orderName={displayOrderName} />
-  }
-
+  // Empty cart state
   if (items.length === 0) {
     return (
       <main className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
@@ -475,209 +71,55 @@ export default function Checkout() {
     )
   }
 
-  const appearance = {
-    theme: 'stripe' as const,
-    variables: {
-      colorPrimary: '#1a1a1a',
-      colorBackground: '#ffffff',
-      colorText: '#1a1a1a',
-      colorDanger: '#dc2626',
-      fontFamily: 'Inter, system-ui, sans-serif',
-      borderRadius: '8px',
-    }
+  // Error state
+  if (error) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-red-100">
+            <svg
+              className="w-8 h-8 text-red-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-display mb-2 text-gray-800">
+            Checkout Error
+          </h1>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => {
+              setError(null)
+              setRedirecting(false)
+            }}
+            className="px-6 py-3 bg-ink-900 text-white rounded-lg hover:bg-ink-800 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </main>
+    )
   }
 
+  // Loading/redirecting state
   return (
-    <main className="min-h-screen bg-white lg:bg-gray-50">
-      {/* Logo Header */}
-      <div className="border-b border-gray-200 py-6 bg-white">
-        <div className="max-w-6xl mx-auto px-4">
-          <Link to="/" className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-ink-900">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="3" width="18" height="18" rx="2" stroke="white" strokeWidth="2" fill="none"/>
-                <rect x="6" y="6" width="12" height="12" rx="1" stroke="white" strokeWidth="1.5" fill="none"/>
-                <circle cx="12" cy="12" r="3" fill="white" opacity="0.9"/>
-              </svg>
-            </div>
-            <span className="text-xl font-semibold text-ink-900">Gallery Store</span>
-          </Link>
+    <main className="min-h-screen flex items-center justify-center px-4 bg-gray-50">
+      <div className="text-center">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-ink-100">
+          <svg className="animate-spin h-8 w-8 text-ink-600" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
         </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto">
-        <div className="lg:grid lg:grid-cols-2">
-          {/* Left Column - Form */}
-          <div className="bg-white px-4 py-8 lg:px-12 lg:py-10 lg:border-r lg:border-gray-200">
-            {/* Contact Section */}
-            <section className="mb-8">
-              <h2 className="text-lg font-semibold text-ink-900 mb-4">Contact</h2>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email or mobile phone number"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-              />
-              <label className="flex items-center gap-2 mt-3 text-sm text-ink-600">
-                <input type="checkbox" className="rounded border-gray-300" defaultChecked />
-                Email me with news and offers
-              </label>
-            </section>
-
-            {/* Delivery Section */}
-            <section className="mb-8">
-              <h2 className="text-lg font-semibold text-ink-900 mb-4">Delivery</h2>
-              <div className="space-y-3">
-                <select
-                  value={shippingAddress.country}
-                  onChange={(e) => updateField('country', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900 bg-white"
-                >
-                  <option value="US">United States</option>
-                  <option value="CA">Canada</option>
-                  <option value="GB">United Kingdom</option>
-                  <option value="AU">Australia</option>
-                </select>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    value={shippingAddress.firstName}
-                    onChange={(e) => updateField('firstName', e.target.value)}
-                    placeholder="First name (optional)"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                  />
-                  <input
-                    type="text"
-                    value={shippingAddress.lastName}
-                    onChange={(e) => updateField('lastName', e.target.value)}
-                    placeholder="Last name"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                  />
-                </div>
-
-                <input
-                  type="text"
-                  value={shippingAddress.address1}
-                  onChange={(e) => updateField('address1', e.target.value)}
-                  placeholder="Address"
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                />
-
-                <input
-                  type="text"
-                  value={shippingAddress.address2}
-                  onChange={(e) => updateField('address2', e.target.value)}
-                  placeholder="Apartment, suite, etc. (optional)"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                />
-
-                <div className="grid grid-cols-3 gap-3">
-                  <input
-                    type="text"
-                    value={shippingAddress.city}
-                    onChange={(e) => updateField('city', e.target.value)}
-                    placeholder="City"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                  />
-                  <input
-                    type="text"
-                    value={shippingAddress.province}
-                    onChange={(e) => updateField('province', e.target.value)}
-                    placeholder="State"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                  />
-                  <input
-                    type="text"
-                    value={shippingAddress.zip}
-                    onChange={(e) => updateField('zip', e.target.value)}
-                    placeholder="ZIP code"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                  />
-                </div>
-
-                <input
-                  type="tel"
-                  value={shippingAddress.phone}
-                  onChange={(e) => updateField('phone', e.target.value)}
-                  placeholder="Phone (optional)"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg outline-none transition-all focus:border-ink-900 focus:ring-1 focus:ring-ink-900"
-                />
-              </div>
-            </section>
-
-            {/* Shipping Method */}
-            <section className="mb-8">
-              <h2 className="text-lg font-semibold text-ink-900 mb-4">Shipping method</h2>
-              <div className="bg-paper-100 rounded-lg px-4 py-3 text-sm text-ink-500">
-                {isShippingComplete ? (
-                  <div className="flex justify-between items-center">
-                    <span>Free worldwide shipping</span>
-                    <span className="font-medium text-ink-900">Free</span>
-                  </div>
-                ) : (
-                  'Enter your shipping address to view available shipping methods.'
-                )}
-              </div>
-            </section>
-
-            {/* Payment Section */}
-            <section>
-              <h2 className="text-lg font-semibold text-ink-900 mb-2">Payment</h2>
-              <p className="text-sm text-ink-500 mb-4">All transactions are secure and encrypted.</p>
-
-              {loading || !stripeReady ? (
-                <div className="flex items-center justify-center py-12 border border-gray-200 rounded-xl bg-white">
-                  <svg
-                    className="animate-spin h-8 w-8 text-gray-400"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                </div>
-              ) : error ? (
-                <div className="text-center py-8 border border-gray-200 rounded-xl bg-white">
-                  <p className="text-red-600 mb-4">{error}</p>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="px-6 py-2 text-white rounded-lg bg-ink-900 hover:bg-ink-800"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              ) : clientSecret && stripeReady ? (
-                <Elements stripe={getStripe()} options={{ clientSecret, appearance }}>
-                  <CheckoutForm
-                    total={total}
-                    items={items}
-                    shippingAddress={shippingAddress}
-                    email={email}
-                    onSuccess={handleOrderSuccess}
-                    isShippingComplete={isShippingComplete}
-                  />
-                </Elements>
-              ) : null}
-            </section>
-          </div>
-
-          {/* Right Column - Order Summary */}
-          <div className="lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto order-first lg:order-last">
-            <OrderSummary
-              items={items}
-              total={total}
-              isOpen={orderSummaryOpen}
-              onToggle={() => setOrderSummaryOpen(!orderSummaryOpen)}
-            />
-          </div>
-        </div>
+        <h1 className="text-2xl font-display mb-2 text-gray-800">
+          Redirecting to checkout...
+        </h1>
+        <p className="text-gray-600">
+          You'll be taken to our secure checkout page.
+        </p>
       </div>
     </main>
   )

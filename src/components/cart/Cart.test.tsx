@@ -263,11 +263,11 @@ describe('Cart', () => {
   })
 
   describe('footer', () => {
-    it('should show subtotal', async () => {
+    it('should show total', async () => {
       renderCart({ withItem: true })
-      
+
       await waitFor(() => {
-        expect(screen.getByText('Subtotal')).toBeInTheDocument()
+        expect(screen.getByText('Total')).toBeInTheDocument()
       })
     })
 
@@ -288,12 +288,13 @@ describe('Cart', () => {
       })
     })
 
-    it('should link Checkout to /checkout', async () => {
+    it('should have Checkout button that triggers Shopify checkout', async () => {
       renderCart({ withItem: true })
-      
+
       await waitFor(() => {
-        const checkoutLink = screen.getByText('Checkout').closest('a')
-        expect(checkoutLink?.getAttribute('href')).toBe('/checkout')
+        const checkoutButton = screen.getByText('Checkout').closest('button')
+        expect(checkoutButton).toBeInTheDocument()
+        expect(checkoutButton).not.toBeDisabled()
       })
     })
   })
