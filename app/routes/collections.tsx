@@ -5,7 +5,7 @@ import type { Route } from "./+types/collections";
 import { fetchShopifyProducts } from "@/data/shopify-api";
 import { getResizedImage, IMAGE_SIZES } from "@/utils/images";
 import type { Product } from "@/types";
-import { getDefaultMetaTags, getCollectionMetaTags } from "@/components/seo/MetaTags";
+import { getDefaultMetaTags } from "@/components/seo/MetaTags";
 import { NewsletterForm } from "@/components/newsletter/NewsletterForm";
 import { ArtistCircles } from "@/components/home/ArtistCircles";
 
@@ -74,33 +74,8 @@ export async function loader({ params }: Route.LoaderArgs) {
   }
 }
 
-// Preload artist thumbnail images for faster rendering
-export function links({ data }: Route.LinksArgs) {
-  if (!data?.artists) return []
-  return data.artists.map((artist: Artist) => ({
-    rel: 'preload',
-    as: 'image',
-    href: getResizedImage(artist.image, 100, { crop: 'fill' }),
-  }))
-}
-
 // Meta tags for SEO with Open Graph support
-export function meta({ data }: Route.MetaArgs) {
-  // If an artist is selected, use artist-specific meta
-  if (data?.selectedArtist) {
-    const artist = data.artists?.find(
-      (a: Artist) => a.handle === data.selectedArtist
-    );
-    if (artist) {
-      return getCollectionMetaTags({
-        title: artist.name,
-        description: `Browse museum-quality prints by ${artist.name}`,
-        handle: artist.handle,
-      });
-    }
-  }
-
-  // Default home page meta with OG tags
+export function meta() {
   return getDefaultMetaTags();
 }
 
