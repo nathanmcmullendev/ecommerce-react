@@ -75,10 +75,11 @@ export default function Home() {
         {featured[3] && (
           <div className="absolute inset-0">
             <img
-              src={getResizedImage(featured[3].image, IMAGE_SIZES.full)}
+              src={getResizedImage(featured[3].image, IMAGE_SIZES.preview)}
               alt=""
               className="w-full h-full object-cover opacity-50"
               loading="eager"
+              fetchPriority="high"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-ink-900/50 via-ink-900/30 to-ink-900/70" />
           </div>
@@ -124,7 +125,7 @@ export default function Home() {
                     }}
                   >
                     <img
-                      src={getResizedImage(featured[0].image, IMAGE_SIZES.full)}
+                      src={getResizedImage(featured[0].image, IMAGE_SIZES.preview)}
                       alt={featured[0].title}
                       className="w-full h-full object-cover"
                       loading="lazy"
@@ -242,7 +243,7 @@ export default function Home() {
             <div className="max-w-2xl mx-auto mb-16">
               <div className="relative aspect-[16/10] overflow-hidden rounded-lg shadow-xl">
                 <img
-                  src={getResizedImage(featured[1].image, IMAGE_SIZES.full)}
+                  src={getResizedImage(featured[1].image, IMAGE_SIZES.preview)}
                   alt="Restored artwork"
                   className="w-full h-full object-cover"
                   loading="lazy"
