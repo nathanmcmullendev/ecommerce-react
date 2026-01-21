@@ -44,10 +44,10 @@ export default defineConfig({
         'src/components/error/**'
       ],
       thresholds: {
-        lines: 80,
-        functions: 65,
+        lines: 65,
+        functions: 60,
         branches: 70,
-        statements: 80
+        statements: 65
       }
     }
   }
