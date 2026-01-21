@@ -233,31 +233,21 @@ describe('Cart', () => {
       })
     })
 
-    it('should display frame via color selector', async () => {
+    it('should display frame in options text', async () => {
       renderCart({ withItem: true })
 
       await waitFor(() => {
-        // Frame is now shown via color circles with title attributes
-        const blackFrameButton = screen.getByTitle('Black Frame')
-        expect(blackFrameButton).toBeInTheDocument()
+        // Frame is shown as text in the options line (e.g., "8x10 • black")
+        expect(screen.getByText(/black/)).toBeInTheDocument()
       })
     })
 
-    it('should show size in cart item', async () => {
+    it('should show size and frame together in cart item', async () => {
       renderCart({ withItem: true })
 
       await waitFor(() => {
-        // Size is displayed separately, frame is shown via color circles
-        expect(screen.getByText('8x10')).toBeInTheDocument()
-      })
-    })
-
-    it('should render frame color selector circles', async () => {
-      renderCart({ withItem: true })
-
-      await waitFor(() => {
-        // Frame selector circles should have aria-labels
-        expect(screen.getByLabelText('Select Black Frame')).toBeInTheDocument()
+        // Size and frame are displayed together as "8x10 • black"
+        expect(screen.getByText('8x10 • black')).toBeInTheDocument()
       })
     })
   })

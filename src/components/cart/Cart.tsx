@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router'
 import { useCart, useCartDispatch } from '../../context/CartContext'
 import { getResizedImage } from '../../utils/images'
 import type { ProductRouterState } from '../../types'
 import { ShippingProgress } from '../layout/ShippingBanner'
-import { YouMayAlsoLike } from './YouMayAlsoLike'
+// YouMayAlsoLike temporarily disabled - uses invalid variant IDs
+// import { YouMayAlsoLike } from './YouMayAlsoLike'
 import { createShopifyCheckout } from '../../data/shopify-api'
 
 /**
@@ -40,6 +41,14 @@ export default function Cart() {
   const dispatch = useCartDispatch()
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
+
+  // Reset checkout state when cart opens (e.g., after browser back from checkout)
+  useEffect(() => {
+    if (isOpen) {
+      setCheckoutLoading(false)
+      setCheckoutError(null)
+    }
+  }, [isOpen])
 
   // Handle checkout - create Shopify cart and redirect
   const handleCheckout = async () => {
