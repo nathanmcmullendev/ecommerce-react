@@ -580,7 +580,17 @@ export async function createShopifyCheckout(
     throw new ShopifyApiError('No checkout URL returned from Shopify')
   }
 
-  return response.data.cartCreate.cart.checkoutUrl
+  // Replace myshopify.com domain with custom checkout domain if configured
+  let checkoutUrl = response.data.cartCreate.cart.checkoutUrl
+  const customCheckoutDomain = import.meta.env.VITE_CHECKOUT_DOMAIN
+  if (customCheckoutDomain) {
+    checkoutUrl = checkoutUrl.replace(
+      /https:\/\/[^/]+\.myshopify\.com/,
+      `https://${customCheckoutDomain}`
+    )
+  }
+
+  return checkoutUrl
 }
 
 // Export config for checking data source
