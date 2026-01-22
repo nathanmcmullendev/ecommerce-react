@@ -32,7 +32,7 @@
     "@stripe/react-stripe-js": "^2.4.0",
     "@stripe/stripe-js": "^2.2.0",
     "@vercel/analytics": "^1.6.1",
-    "@vercel/node": "^5.5.16",
+    "@vercel/node": "^5.5.26",
     "@vercel/react-router": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
