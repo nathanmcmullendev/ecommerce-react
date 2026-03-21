@@ -7,6 +7,7 @@
 [![React Router](https://img.shields.io/badge/React_Router-7.1-ca4245)](https://reactrouter.com/)
 [![Lighthouse](https://img.shields.io/badge/Lighthouse-98%2F95%2F96%2F100-brightgreen)](https://pagespeed.web.dev/)
 [![Tests](https://img.shields.io/badge/Tests-347%20passing-success)](/)
+[![E2E](https://img.shields.io/badge/E2E-13%20Playwright%20tests-blueviolet)](/)
 
 > **The Problem:** Shopify dev stores block checkout behind a password wall, making it impossible to demo or test the complete purchase flow during development.
 >
@@ -177,6 +178,7 @@ flowchart LR
 ### Developer Experience
 - [x] **TypeScript strict** - Zero `any` types
 - [x] **347 passing tests** - Unit, component, integration
+- [x] **13 Playwright E2E tests** - Full user journey against live deployment
 - [x] **89% coverage** - CI enforced
 - [x] **Zero ESLint warnings** - Clean codebase
 
@@ -220,6 +222,8 @@ flowchart LR
 │   ├── context/          # Cart state (SSR-safe)
 │   ├── data/             # Shopify API client
 │   └── pages/            # Page components
+├── e2e/
+│   └── smoke.spec.ts     # 13 Playwright E2E tests
 └── docs/
     ├── guides/           # Setup & configuration
     └── architecture/     # System design
@@ -235,6 +239,7 @@ flowchart LR
 | [`src/context/CartContext.tsx`](src/context/CartContext.tsx) | Cart with hydration-safe persistence |
 | [`src/config/checkout.ts`](src/config/checkout.ts) | Checkout mode configuration |
 | [`app/routes/checkout.tsx`](app/routes/checkout.tsx) | Dynamic checkout loading |
+| [`e2e/smoke.spec.ts`](e2e/smoke.spec.ts) | Playwright E2E test suite |
 | [`docs/guides/CHECKOUT-MODES.md`](docs/guides/CHECKOUT-MODES.md) | Checkout setup guide |
 
 ---
@@ -266,10 +271,33 @@ VITE_GA_TRACKING_ID=G-XXXXXXXXXX
 npm test              # Watch mode
 npm run test:run      # Single run
 npm run test:coverage # With coverage
+npx playwright test   # E2E tests against live deployment
 npm run validate      # Full CI check
 ```
 
-**347 tests** covering cart flow, checkout, components, and API integration.
+### Unit / Component / Integration — 347 tests
+
+| File | Tests | Coverage |
+|------|-------|----------|
+| `CartContext.test.tsx` | 14 | 85.5% |
+| `products.test.ts` | 33 | 100% |
+| `images.test.ts` | 20 | 77.3% |
+| `Cart.test.tsx` | 23 | 90.5% |
+| `ProductCard.test.tsx` | 17 | 96.8% |
+| `integration.test.tsx` | 7 | — |
+| **Total** | **347** | **89%** |
+
+### E2E — 13 Playwright tests
+
+End-to-end tests run against the live Vercel deployment, covering real browser user flows:
+
+| Suite | Coverage |
+|-------|----------|
+| Home Page | Product grid loads, prices visible, image delivery |
+| Product Page | Navigation, Add to Cart button visible |
+| Cart Flow | Add item, update quantity, remove item, proceed to checkout |
+| Checkout Page | Empty state message, Stripe Elements render |
+| Navigation | Logo nav, cart persists across route changes |
 
 ---
 
@@ -295,6 +323,17 @@ Add environment variables in Vercel Dashboard → Settings → Environment Varia
 | [Checkout Modes](docs/guides/CHECKOUT-MODES.md) | Stripe vs Shopify checkout |
 | [Architecture](docs/architecture/ARCHITECTURE.md) | System design decisions |
 | [SSR Persistence](docs/guides/SSR-PERSISTENCE-GUIDE.md) | Solving hydration errors |
+
+---
+
+## Roadmap
+
+- [x] Dual checkout modes (Stripe + Shopify)
+- [x] E2E tests with Playwright (13 smoke tests across 5 suites)
+- [x] 89% unit test coverage CI enforced
+- [ ] Improve accessibility score to 95+
+- [ ] Add PWA support
+- [ ] Optimize LCP below 2.5s threshold
 
 ---
 
